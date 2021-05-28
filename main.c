@@ -22,7 +22,7 @@ static void *load_file(const char *path, int *len)
 	FILE *fp = fopen(path, "rb+");
 
 	if (fp == NULL) {
-		fprintf(stdout, "failed to open %s\n", path);
+		fprintf(stderr, "failed to open %s\n", path);
 		return NULL;
 	}
 
@@ -32,6 +32,11 @@ static void *load_file(const char *path, int *len)
 
 	/* align buffer size up to 8 bytes */
 	bufsz = (fsz + 7) & ~7;
+	if (bufsz < 256) {
+		fprintf(stdout, "file is smaller than 256 bytes, padding...\n");
+		bufsz = 256;
+	}
+
 	data = malloc(bufsz);
 	assert(data != NULL);
 
@@ -43,7 +48,6 @@ static void *load_file(const char *path, int *len)
 
 	fclose(fp);
 	*len = bufsz;
-
 	return data;
 }
 
@@ -73,7 +77,7 @@ static int usbisp_boot(void *ctx, const char *path)
 		return -1;
 
 	if (len > 256)
-		fprintf(stderr, "input bootloader is larger than 256 bytes! ignoring extra data...\n");
+		fprintf(stderr, "bootloader is larger than 256 bytes! ignoring extra data...\n");
 
 	err = spmp_usb_boot(ctx, data);
 	if (!err)
