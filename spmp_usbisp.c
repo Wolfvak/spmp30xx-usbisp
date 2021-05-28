@@ -1,0 +1,153 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+/* low level USB interface stuff */
+
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <libusb.h>
+
+typedef struct {
+	libusb_context *usb;
+	libusb_device_handle *dev;
+} spmp_usb_ctx;
+
+#define SPMP_TIMEOUT	(500)
+#define SPMP_UPD_PERIOD	(64)
+
+#define SPMP_VENDOR	(0x04FC)
+#define SPMP_DEVICE	(0x5560)
+
+#define MAX_BULK_LEN	(4096) /* hardware and OS dependant but whatever */
+
+int spmp_usb_upload(void *ctx, uint32_t addr, void *data, int len)
+{
+	int err, xferd;
+	uint32_t pkt[2], total_len;
+	libusb_device_handle *devh = ((spmp_usb_ctx*)ctx)->dev;
+
+	pkt[0] = addr;
+	pkt[1] = len;
+
+	err = libusb_control_transfer(devh, 0x41, 0xFD, 0x00, 0x4F3, (void*)pkt, 8, SPMP_TIMEOUT);
+	if (err < 0) return err;
+
+	fprintf(stdout, "uploading %d bytes to address %08X...\n", len, addr);
+
+	total_len = len;
+	while(len) {
+		uint32_t blksz = len;
+		if (blksz > MAX_BULK_LEN)
+			blksz = MAX_BULK_LEN;
+
+		err = libusb_bulk_transfer(devh, 3, data, blksz, &xferd, SPMP_TIMEOUT);
+		if (err < 0) return err;
+
+		data += blksz;
+		len -= blksz;
+
+		if (!((total_len - len) % (SPMP_UPD_PERIOD * MAX_BULK_LEN)))
+			fprintf(stdout, "uploaded %d bytes (%.1f%%)\n",
+				total_len - len, ((float)(total_len - len) / (float)total_len) * 100.0f);
+	}
+
+	fprintf(stdout, "done!\n");
+	return err;
+}
+
+int spmp_usb_boot(void *ctx, void *loader)
+{
+	int err, xferd;
+	uint8_t pkt[16];
+	libusb_device_handle *devh = ((spmp_usb_ctx*)ctx)->dev;
+
+	memset(pkt, 0, sizeof(pkt));
+	pkt[12] = 1;
+
+	err = libusb_control_transfer(devh, 0x41, 0xFD, 0x00, 0x4F1, pkt, 16, SPMP_TIMEOUT);
+	if (err < 0) {
+		fprintf(stderr, "failed to signal firmware boot (%s)\n",
+			libusb_error_name(err));
+		return err;
+	}
+
+	err = libusb_bulk_transfer(devh, 3, loader, 0x100, &xferd, SPMP_TIMEOUT);
+	if (err < 0)
+		fprintf(stderr, "failed to transfer bootloader code (%s)\n",
+			libusb_error_name(err));
+	return err;
+}
+
+static int spmp_usb_claim(libusb_device_handle *devh)
+{
+	int err;
+
+	err = libusb_set_configuration(devh, 1);
+	if (err < 0) {
+		fprintf(stderr, "failed to set configuration (%s)\n",
+			libusb_error_name(err));
+		return err;
+	}
+
+	err = libusb_claim_interface(devh, 1);
+	if (err < 0) {
+		fprintf(stderr, "failed to claim interface (%s)\n",
+			libusb_error_name(err));
+		return err;
+	}
+
+	err = libusb_set_interface_alt_setting(devh, 1, 0);
+	if (err < 0) {
+		fprintf(stderr, "failed to set interface alt config (%s)\n",
+			libusb_error_name(err));
+	}
+
+	return err;
+}
+
+void *spmp_usb_init(void)
+{
+	int err;
+	spmp_usb_ctx *ctx;
+	libusb_context *usb;
+	libusb_device_handle *dev;
+
+	err = libusb_init(&usb);
+	if (err) {
+		fprintf(stderr, "failed to initialize libusb (%s)\n",
+			libusb_error_name(err));
+		return NULL;
+	}
+
+	dev = libusb_open_device_with_vid_pid(usb, SPMP_VENDOR, SPMP_DEVICE);
+	if (!dev) {
+		fprintf(stderr, "failed to find device %04X:%04X\n",
+			SPMP_VENDOR, SPMP_DEVICE);
+		goto ctx_close;
+	}
+
+	err = spmp_usb_claim(dev);
+	if (err) {
+		fprintf(stderr, "failed to claim device (%s)\n",
+			libusb_error_name(err));
+		goto ctx_close;
+	}
+
+	ctx = malloc(sizeof(*ctx));
+	ctx->usb = usb;
+	ctx->dev = dev;
+	return ctx;
+
+ctx_close:
+	libusb_exit(usb);
+	return NULL;
+}
+
+void spmp_usb_exit(void *ctx)
+{
+	spmp_usb_ctx *usb_ctx = ctx;
+	libusb_close(usb_ctx->dev);
+	libusb_exit(usb_ctx->usb);
+	free(usb_ctx);
+}
