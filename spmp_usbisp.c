@@ -13,59 +13,80 @@ typedef struct {
 	libusb_device_handle *dev;
 } spmp_usb_ctx;
 
-#define SPMP_TIMEOUT	(500)
-#define SPMP_UPD_PERIOD	(64)
+#define SPMP_TIMEOUT	(2000)
+#define SPMP_BULK_UPDATE	(MAX_BULK_LEN * 64)
 
 #define SPMP_VENDOR	(0x04FC)
 #define SPMP_DEVICE	(0x5560)
 
 #define MAX_BULK_LEN	(4096) /* hardware and OS dependant but whatever */
 
-int spmp_usb_upload(void *ctx, uint32_t addr, void *data, int len)
+#define SPMP_CMD_FWBOOT	(0x4F1)
+#define SPMP_CMD_FWUPLOAD	(0x4F3)
+#define SPMP_CMD_FWDOWNLOAD	(0x4F2)
+
+static int spmp_usb_updown(void *ctx, int cmd, int xfer_endpoint,
+							uint32_t addr, void *data, int len)
 {
 	int err, xferd;
-	uint32_t pkt[2], total_len;
+	uint32_t pkt[2];
 	libusb_device_handle *devh = ((spmp_usb_ctx*)ctx)->dev;
 
 	pkt[0] = addr;
 	pkt[1] = len;
 
-	err = libusb_control_transfer(devh, 0x41, 0xFD, 0x00, 0x4F3, (void*)pkt, 8, SPMP_TIMEOUT);
+	err = libusb_control_transfer(devh, 0x41, 0xFD, 0x00, cmd,
+		(void*)pkt, 8, SPMP_TIMEOUT);
 	if (err < 0) return err;
 
-	fprintf(stdout, "uploading %d bytes to address %08X...\n", len, addr);
+	fprintf(stdout, "transferring %d bytes on address %08X...\n", len, addr);
 
-	total_len = len;
-	while(len) {
-		uint32_t blksz = len;
+	for (unsigned i = 0; i < len; ) {
+		uint32_t blksz = len - i;
 		if (blksz > MAX_BULK_LEN)
 			blksz = MAX_BULK_LEN;
 
-		err = libusb_bulk_transfer(devh, 3, data, blksz, &xferd, SPMP_TIMEOUT);
-		if (err < 0) return err;
+		err = libusb_bulk_transfer(devh, xfer_endpoint,
+			data, blksz, &xferd, SPMP_TIMEOUT);
+		if (err < 0) {
+			fprintf(stderr, "bulk xfer failed (%s)\n", libusb_error_name(err));
+			return err;
+		}
 
 		data += blksz;
-		len -= blksz;
+		i += blksz;
 
-		if (!((total_len - len) % (SPMP_UPD_PERIOD * MAX_BULK_LEN)))
-			fprintf(stdout, "uploaded %d bytes (%.1f%%)\n",
-				total_len - len, ((float)(total_len - len) / (float)total_len) * 100.0f);
+		if (!(i % SPMP_BULK_UPDATE))
+			fprintf(stdout, "transferred %d bytes (%.1f%%)\n",
+				i, ((float)i / (float)len) * 100.0f);
 	}
 
-	fprintf(stdout, "done!\n");
+	fprintf(stdout, "done transferring!\n");
 	return err;
 }
 
-int spmp_usb_boot(void *ctx, void *loader)
+int spmp_usb_upload(void *ctx, uint32_t addr, void *data, int len)
+{
+	return spmp_usb_updown(ctx, SPMP_CMD_FWUPLOAD, 3, addr, data, len);
+}
+
+int spmp_usb_download(void *ctx, uint32_t addr, void *data, int len)
+{
+	return spmp_usb_updown(ctx, SPMP_CMD_FWDOWNLOAD, 0x82, addr, data, len);
+}
+
+int spmp_usb_boot(void *ctx, void *loader, int pages)
 {
 	int err, xferd;
-	uint8_t pkt[16];
+	uint32_t pkt[4];
 	libusb_device_handle *devh = ((spmp_usb_ctx*)ctx)->dev;
 
-	memset(pkt, 0, sizeof(pkt));
-	pkt[12] = 1;
+	pkt[0] = 0; /* pkt[0] | 0x24000000 = download address, must be > 0 */
+	pkt[1] = pkt[2] = 0; /* if either is set, don't boot (?) */
+	pkt[3] = pages; /* number of 256byte pages to send */
 
-	err = libusb_control_transfer(devh, 0x41, 0xFD, 0x00, 0x4F1, pkt, 16, SPMP_TIMEOUT);
+	err = libusb_control_transfer(devh, 0x41, 0xFD, 0x00, SPMP_CMD_FWBOOT,
+		(void*)pkt, 16, SPMP_TIMEOUT);
 	if (err < 0) {
 		fprintf(stderr, "failed to signal firmware boot (%s)\n",
 			libusb_error_name(err));
@@ -74,7 +95,7 @@ int spmp_usb_boot(void *ctx, void *loader)
 
 	err = libusb_bulk_transfer(devh, 3, loader, 0x100, &xferd, SPMP_TIMEOUT);
 	if (err < 0)
-		fprintf(stderr, "failed to transfer bootloader code (%s)\n",
+		fprintf(stderr, "failed to transfer boot code (%s)\n",
 			libusb_error_name(err));
 	return err;
 }
@@ -120,6 +141,10 @@ void *spmp_usb_init(void)
 		return NULL;
 	}
 
+	ctx = malloc(sizeof(*ctx));
+	if (!ctx)
+		goto ctx_close;
+
 	dev = libusb_open_device_with_vid_pid(usb, SPMP_VENDOR, SPMP_DEVICE);
 	if (!dev) {
 		fprintf(stderr, "failed to find device %04X:%04X\n",
@@ -134,12 +159,12 @@ void *spmp_usb_init(void)
 		goto ctx_close;
 	}
 
-	ctx = malloc(sizeof(*ctx));
 	ctx->usb = usb;
 	ctx->dev = dev;
 	return ctx;
 
 ctx_close:
+	free(ctx);
 	libusb_exit(usb);
 	return NULL;
 }

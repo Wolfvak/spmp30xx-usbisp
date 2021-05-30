@@ -30,12 +30,8 @@ static void *load_file(const char *path, int *len)
 	fsz = ftell(fp);
 	fseek(fp, 0L, SEEK_SET);
 
-	/* align buffer size up to 8 bytes */
-	bufsz = (fsz + 7) & ~7;
-	if (bufsz < 256) {
-		fprintf(stdout, "file is smaller than 256 bytes, padding...\n");
-		bufsz = 256;
-	}
+	/* align buffer size up to 256 bytes */
+	bufsz = (fsz + 255) & ~255;
 
 	data = malloc(bufsz);
 	assert(data != NULL);
@@ -43,12 +39,24 @@ static void *load_file(const char *path, int *len)
 	err = fread(data, fsz, 1, fp);
 	assert(err == 1);
 
-	for (unsigned i = fsz; i < bufsz; i++)
-		data[i] = 0; /* fill padding with zeroes */
+	if (bufsz != fsz) /* fill padding with zero */
+		memset(&data[fsz], 0, bufsz - fsz);
 
 	fclose(fp);
 	*len = bufsz;
 	return data;
+}
+
+static int save_file(const char *path, void *data, int len)
+{
+	FILE *fp = fopen(path, "wb+");
+	if (fp == NULL) {
+		fprintf(stderr, "failed to open file \"%s\" for writing\n", path);
+		return -1;
+	}
+	fwrite(data, 1, len, fp);
+	fclose(fp);
+	return 0;
 }
 
 static int usbisp_upload(void *ctx, const char *address, const char *path)
@@ -68,6 +76,32 @@ static int usbisp_upload(void *ctx, const char *address, const char *path)
 	return err;
 }
 
+static int usbisp_download(void *ctx, const char *address,
+	const char *length, const char *path)
+{
+	void *data;
+	int len, err;
+	uint32_t addr;
+
+	len = strtoul(length, NULL, 0);
+	addr = strtoul(address, NULL, 0);
+	if (len < 8) {
+		fprintf(stderr, "firmware download must be larger than 8 bytes!\n");
+		return -1;
+	}
+
+	data = malloc(len);
+	err = spmp_usb_download(ctx, addr, data, len);
+	if (!err) {
+		err = save_file(path, data, len);
+	} else {
+		fprintf(stderr, "failed to download firmware\n");
+	}
+
+	free(data);
+	return err;
+}
+
 static int usbisp_boot(void *ctx, const char *path)
 {
 	int len, err;
@@ -76,10 +110,7 @@ static int usbisp_boot(void *ctx, const char *path)
 	if (!data)
 		return -1;
 
-	if (len > 256)
-		fprintf(stderr, "bootloader is larger than 256 bytes! ignoring extra data...\n");
-
-	err = spmp_usb_boot(ctx, data);
+	err = spmp_usb_boot(ctx, data, len / 256);
 	if (!err)
 		fprintf(stdout, "booted %s\n", path);
 
@@ -115,6 +146,19 @@ int main(int argc, char *argv[])
 			break;
 		}
 
+		case 'd':
+		case 'D':
+		{
+			// download
+			if (argc < 5)
+				goto show_usage;
+
+			err = usbisp_download(ctx, argv[2], argv[3], argv[4]);
+			if (err < 0)
+				fprintf(stderr, "failed to download data\n");
+			break;
+		}
+
 		case 'b':
 		case 'B':
 		{
@@ -126,6 +170,7 @@ int main(int argc, char *argv[])
 		}
 
 		default:
+			fprintf(stderr, "unrecognized action '%c'\n", *argv[1]);
 			err = -1;
 			break;
 	}
@@ -136,6 +181,12 @@ int main(int argc, char *argv[])
 		return 0;
 
 show_usage:
-	fprintf(stdout, "Usage: spmp30xx_usbisp {u, b} {address, file; file}\n");
+	fprintf(stdout,
+		"Usage: spmp30xx_usbisp [OPTIONS]\n"
+		" [OPTIONS]:\n"
+		" - to upload data: 'u address file'\n"
+		" - to download data: 'd address length file'\n"
+		" - to boot a firmware: 'b file'\n\n"
+		"Remember this needs to run as super user!\n\n");
 	return EXIT_FAILURE;
 }

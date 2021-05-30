@@ -39,4 +39,4 @@ _pool:
 uart_base: .word 0x10001800
 
 .align 2
-test_string: .ascii "Hello!\n"
+test_string: .ascii "Hello, world!\n"
