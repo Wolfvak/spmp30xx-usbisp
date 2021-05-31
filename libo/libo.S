@@ -69,8 +69,6 @@ dcloop: @ test, clean and invalidate all dcache
 	mov r1, #0xFFFFFFFF
 	ldr r2, =DTB_ADDRESS
 	ldr pc, =KERNEL_ADDRESS
-
-	bkpt @ just in case...
 .endfunc
 
 dtb_str: .asciz "DTB @ "

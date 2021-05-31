@@ -93,10 +93,42 @@ int spmp_usb_boot(void *ctx, void *loader, int pages)
 		return err;
 	}
 
-	err = libusb_bulk_transfer(devh, 3, loader, 0x100, &xferd, SPMP_TIMEOUT);
+	err = libusb_bulk_transfer(devh, 3, loader, pages * 256,
+		&xferd, SPMP_TIMEOUT);
 	if (err < 0)
 		fprintf(stderr, "failed to transfer boot code (%s)\n",
 			libusb_error_name(err));
+	return err;
+}
+
+int spmp_usb_peek(void *ctx, uint16_t offset, uint8_t *value)
+{
+	int err;
+	libusb_device_handle *devh = ((spmp_usb_ctx*)ctx)->dev;
+
+	err = libusb_control_transfer(devh, 0xC0, 0x00, 0x00, offset,
+		(void*)value, 1, SPMP_TIMEOUT);
+	if (err != 1) {
+		fprintf(stderr, "failed to peek register %04X (%s)\n",
+			offset, libusb_error_name(err));
+		err = -1;
+	} else {
+		err = 0;
+	}
+
+	return err;
+}
+
+int spmp_usb_poke(void *ctx, uint16_t offset, uint8_t value)
+{
+	int err;
+	libusb_device_handle *devh = ((spmp_usb_ctx*)ctx)->dev;
+
+	err = libusb_control_transfer(devh, 0x40, 0x00, value, offset,
+		NULL, 0, SPMP_TIMEOUT);
+	if (err)
+		fprintf(stderr, "failed to poke register %04X (%s)\n",
+			offset, libusb_error_name(err));
 	return err;
 }
 
