@@ -106,30 +106,33 @@ static void spmp_spi_test(void *ctx)
 #define TIMER_FLAG_UPCOUNT	0x01
 #define TIMER_FLAG_RELOAD	0x10
 
-void spmp_timer_test(void *ctx)
+void spmp_timer_test(void *ctx, unsigned id)
 {
 	uint32_t counter;
 
+	if (id > 3)
+		fprintf(stderr, "unknown timer %d\n", id);
+
 	spmp_write8(ctx, REG_TIMER_ENABLE, 0);
 
-	spmp_write8(ctx, REG_TIMER_FLAGS(0), 0);
-	spmp_write16(ctx, REG_TIMER_PERIOD(0), 0);
-	spmp_write32(ctx, REG_TIMER_COUNTER(0), 0x1000);
+	spmp_write8(ctx, REG_TIMER_FLAGS(id), 0);
+	spmp_write16(ctx, REG_TIMER_PERIOD(id), 0);
+	spmp_write32(ctx, REG_TIMER_COUNTER(id), 0x1000);
 
-	spmp_write16(ctx, REG_TIMER_PERIOD(0), 0);
+	spmp_write16(ctx, REG_TIMER_PERIOD(id), 0);
 
 	/*
 	 * dont reload the counter register
 	 * if it saturates it should get stuck
 	 */
-	spmp_write8(ctx, REG_TIMER_FLAGS(0), TIMER_FLAG_UPCOUNT);
+	spmp_write8(ctx, REG_TIMER_FLAGS(id), TIMER_FLAG_UPCOUNT);
 
-	spmp_write8(ctx, REG_TIMER_ENABLE, 1);
+	spmp_write8(ctx, REG_TIMER_ENABLE, 1 << id);
 	/* timing critical region begins */
 
 	usleep(200 * 1000); /* totally very accurate */
 
-	counter = spmp_read24(ctx, REG_TIMER_COUNTER(0));
+	counter = spmp_read24(ctx, REG_TIMER_COUNTER(id));
 	/* timing critical region ends */
 
 	spmp_write8(ctx, REG_TIMER_ENABLE, 0);
@@ -139,7 +142,7 @@ void spmp_timer_test(void *ctx)
 	 * but at least its an upper limit thats
 	 * very close to the actual timer frequency
 	 */
-	fprintf(stdout, "timer frequency is ~= %dHz\n", 5 * counter);
+	fprintf(stdout, "timer %d frequency is ~= %dHz\n", id, 5 * counter);
 }
 
 #define REG_MAINCLK	(0x0B0)
@@ -206,8 +209,9 @@ int main(int argc, char *argv[])
 	/* get clocks */
 	spmp_clk_test(ctx);
 
-	/* get timer frequency */
-	spmp_timer_test(ctx);
+	/* get timer frequencies */
+	for (unsigned i = 0; i < 4; i++)
+		spmp_timer_test(ctx, i);
 
 	/* simple SPI chip detection test */
 	spmp_spi_test(ctx);
