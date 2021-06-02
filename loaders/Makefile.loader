@@ -1,0 +1,23 @@
+TRIPLET	?= arm-none-eabi
+
+CC	:= $(TRIPLET)-gcc
+OC	:= $(TRIPLET)-objcopy
+
+TARGET	:= $(shell basename "$(shell pwd)").bin
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+%.bin: %.elf
+	@$(OC) -O binary $< $@
+
+%.elf: .FORCE
+	$(CC) -Wall -nostartfiles -T../spmp.ld $(wildcard *.S) $(wildcard *.c) -o $@
+
+clean:
+	@rm -rf *.bin *.elf
+
+.FORCE:
+
+.PRECIOUS: %.elf

@@ -5,6 +5,11 @@ ENTRY(_start)
 MEMORY
 {
 	RAM (RWX) : ORIGIN = 0x24000000, LENGTH = 0x1000
+	/*
+	 * in theory the size can be 16MiB
+	 * but I guess it's best to keep it small
+	 * this is only meant for really simple payloads
+	 */
 }
 
 SECTIONS

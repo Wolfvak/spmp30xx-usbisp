@@ -1,0 +1,18 @@
+CFLAGS	:= $(shell pkg-config --cflags libusb-1.0) -I../spmp_usb/ -O2 -Wall -Wextra
+LDFLAGS	:= $(shell pkg-config --libs libusb-1.0)
+
+SOURCES	:= $(wildcard *.c)
+
+TARGET	:= $(shell basename "$(shell pwd)")
+
+.PHONY: all clean .FORCE
+
+all: $(TARGET)
+
+$(TARGET): $(SOURCES) .FORCE
+	$(CC) ../spmp_usb/spmp_usb.c $(wildcard *.c) $(CFLAGS) $(LDFLAGS) -o $@
+
+clean:
+	@rm -rf $(TARGET)
+
+.FORCE:

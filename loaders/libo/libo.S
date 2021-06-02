@@ -1,10 +1,6 @@
 .cpu arm926ej-s
 .fpu softvfp
 
-@ Compile with:
-@ arm-none-eabi-gcc -Wall -nostdlib -Tlibo.ld libo.S -o libo.elf
-@ arm-none-eabi-objcopy -O binary libo.elf libo.bin
-
 .set DTB_ADDRESS, 0x24001000
 .set KERNEL_ADDRESS, 0x24008000
 
@@ -71,11 +67,13 @@ dcloop: @ test, clean and invalidate all dcache
 	ldr pc, =KERNEL_ADDRESS
 .endfunc
 
-dtb_str: .asciz "DTB @ "
-ker_str: .asciz "\nKernel @ "
-boot_str: .asciz "\nBooting...\n"
 .align 2
 .pool
+
+@ no need to align the strings
+dtb_str: .asciz "DTB @ "
+ker_str: .asciz "\n\rKernel @ "
+boot_str: .asciz "\n\rBooting...\n\r"
 
 .thumb
 
@@ -104,8 +102,8 @@ print_str:
 	strb SCRATCH0, [UARTBASE, #REG_UART_FIFO]
 
 	sub SCRATCH3, #1
-	beq 4f
-	@ fall through to next char
+	beq 4f @ branch out if nothing remains
+	@ fall through to next char otherwise
 
 2:
 	lsr SCRATCH0, PARAM0, #28

@@ -1,0 +1,7 @@
+*.bin
+*.elf
+*.dmp
+
+spmp_iowr/spmp_iorw
+spmp_isp/spmp_isp
+spmp_playground/spmp_playground

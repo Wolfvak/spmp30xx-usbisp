@@ -1,18 +1,11 @@
-/* SPDX-License-Identifier: GPL-2.0-only */
-
-/*
- * Compile with:
- * cc -O2 usbisp.c spmp_usbisp.c $(pkg-config --cflags --libs libusb-1.0) -o usbisp
- */
-
+// SPDX-License-Identifier: GPL-2.0-only
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
-#include "spmp_usbisp.h"
+#include "spmp_usb.h"
 
 static void *load_file(const char *path, int *len)
 {

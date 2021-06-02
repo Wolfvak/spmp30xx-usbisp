@@ -26,7 +26,7 @@ typedef struct {
 #define SPMP_CMD_FWDOWNLOAD	(0x4F2)
 
 static int spmp_usb_updown(void *ctx, int cmd, int xfer_endpoint,
-							uint32_t addr, void *data, int len)
+							uint32_t addr, void *data, unsigned len)
 {
 	int err, xferd;
 	uint32_t pkt[2];
@@ -65,17 +65,17 @@ static int spmp_usb_updown(void *ctx, int cmd, int xfer_endpoint,
 	return err;
 }
 
-int spmp_usb_upload(void *ctx, uint32_t addr, void *data, int len)
+int spmp_usb_upload(void *ctx, uint32_t addr, void *data, unsigned len)
 {
 	return spmp_usb_updown(ctx, SPMP_CMD_FWUPLOAD, 3, addr, data, len);
 }
 
-int spmp_usb_download(void *ctx, uint32_t addr, void *data, int len)
+int spmp_usb_download(void *ctx, uint32_t addr, void *data, unsigned len)
 {
 	return spmp_usb_updown(ctx, SPMP_CMD_FWDOWNLOAD, 0x82, addr, data, len);
 }
 
-int spmp_usb_boot(void *ctx, void *loader, int pages)
+int spmp_usb_boot(void *ctx, void *loader, unsigned pages)
 {
 	int err, xferd;
 	uint32_t pkt[4];
