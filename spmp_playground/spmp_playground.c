@@ -6,6 +6,7 @@
 #include "spmp_usb.h"
 #include "spmp_io.h"
 
+#include "rtc.h"
 #include "clocks.h"
 #include "timers.h"
 #include "fmc_spi.h"
@@ -27,6 +28,9 @@ int main(void)
 
 	/* simple SPI chip detection test */
 	spmp_spiflash_test(ctx);
+
+	/* RTC testing */
+	spmp_rtc_init(ctx);
 
 	spmp_usb_exit(ctx);
 	return 0;
