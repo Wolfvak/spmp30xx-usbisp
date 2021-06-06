@@ -6,6 +6,7 @@
 #include "spmp_usb.h"
 #include "spmp_io.h"
 
+#include "i2c.h"
 #include "rtc.h"
 #include "clocks.h"
 #include "timers.h"

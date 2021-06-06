@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "spmp_io.h"
 
-#define REG_MAINCLK	(0x0B0)
+#define REG_MAINCLK	(0x0B2)
 #define REG_HCLK	(0x122)
 #define REG_MCLK	(0x123)
 #define REG_CPUCLK	(0x130)

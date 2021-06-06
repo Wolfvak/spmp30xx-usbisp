@@ -117,8 +117,6 @@ static inline void spmp_rtc_set_time(void *ctx, uint64_t ctr)
 
 static inline void spmp_rtc_init(void *ctx)
 {
-	uint8_t reliable;
-
 	/* enable the device */
 	spmp_write8(ctx, REG_UNK0114, spmp_read8(ctx, REG_UNK0114) | 1);
 	spmp_write8(ctx, REG_UNK0005, spmp_read8(ctx, REG_UNK0005) & ~1);
