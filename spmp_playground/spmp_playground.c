@@ -20,6 +20,8 @@ int main(void)
 		return -1;
 	}
 
+	bk1080_test(ctx, 4);
+
 	/* get clocks */
 	spmp_clk_test(ctx);
 
